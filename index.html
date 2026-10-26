@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e9ece0">
+  <title>Tetris | Pocket Arcade</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topline">
+      <a class="brand" href="#top" aria-label="Pocket Arcade home">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>POCKET ARCADE</span>
+      </a>
+      <div class="edition"><span>CLASSIC SERIES</span><span class="edition-number">02</span></div>
+    </header>
+
+    <main id="top">
+      <section class="game-layout" aria-label="Tetris arcade game">
+        <div class="game-column">
+          <div class="page-title">
+            <div>
+              <p class="eyebrow">BLOCK DROP / 02</p>
+              <h1>TETRIS</h1>
+            </div>
+            <span class="title-rule" aria-hidden="true"></span>
+          </div>
+
+          <div class="console">
+            <div class="console-header console-label">
+              <span>LCD DISPLAY</span>
+              <span>10 x 20</span>
+            </div>
+            <div class="screen">
+              <canvas class="game-canvas" id="game-board" width="300" height="600" role="img" aria-label="Tetris game board" aria-describedby="game-status"></canvas>
+              <div class="screen-overlay" id="screen-overlay" aria-hidden="true">
+                <strong id="overlay-title">READY?</strong>
+                <span id="overlay-caption">STACK THE BLOCKS</span>
+              </div>
+            </div>
+            <div class="console-footer">
+              <span class="power-indicator"><i class="power-light" aria-hidden="true"></i>POWER</span>
+              <span>POCKET ARCADE</span>
+            </div>
+          </div>
+        </div>
+
+        <aside class="side-panel" aria-label="Score and controls">
+          <section class="next-panel" aria-labelledby="next-title">
+            <div class="panel-heading">
+              <h2 id="next-title">NEXT</h2>
+              <span>UP</span>
+            </div>
+            <div class="preview-screen">
+              <canvas id="next-piece" width="120" height="100" role="img" aria-label="Next Tetris piece"></canvas>
+            </div>
+          </section>
+
+          <section class="stats-panel" aria-label="Game statistics">
+            <div class="stat">
+              <span class="stat-label">Score</span>
+              <output class="stat-value" id="score-value">000000</output>
+            </div>
+            <div class="stat-row">
+              <div class="stat stat-small">
+                <span class="stat-label">Best</span>
+                <output class="stat-value" id="best-value">000000</output>
+              </div>
+              <div class="stat stat-small">
+                <span class="stat-label">Level</span>
+                <output class="stat-value" id="level-value">01</output>
+              </div>
+              <div class="stat stat-small">
+                <span class="stat-label">Lines</span>
+                <output class="stat-value" id="lines-value">00</output>
+              </div>
+            </div>
+          </section>
+
+          <button class="game-button primary-button" id="play-button" type="button">START</button>
+
+          <section class="control-block" aria-label="Game controls">
+            <p class="control-heading">CONTROLS</p>
+            <p class="keyboard-help"><kbd>←</kbd><kbd>→</kbd> MOVE <kbd>↑</kbd> ROTATE</p>
+            <p class="keyboard-help"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> MOVE <kbd>J</kbd> ROTATE <kbd>L</kbd> DROP</p>
+            <p class="keyboard-help"><kbd>↓</kbd> SOFT DROP <kbd>SPACE</kbd> HARD DROP <kbd>P</kbd> PAUSE</p>
+            <div class="touch-controls" aria-label="Game Boy style touch controls">
+              <div class="d-pad" role="group" aria-label="Direction keypad">
+                <button class="d-pad-button d-pad-up" type="button" data-action="rotate" aria-label="Rotate piece">▲</button>
+                <button class="d-pad-button d-pad-left" type="button" data-action="left" aria-label="Move left">◀</button>
+                <span class="d-pad-center" aria-hidden="true"></span>
+                <button class="d-pad-button d-pad-right" type="button" data-action="right" aria-label="Move right">▶</button>
+                <button class="d-pad-button d-pad-down" type="button" data-action="down" aria-label="Soft drop">▼</button>
+              </div>
+              <div class="action-buttons" role="group" aria-label="Action buttons">
+                <button class="action-button action-a" type="button" data-action="rotate" aria-label="A button: rotate piece">A</button>
+                <button class="action-button action-b" type="button" data-action="drop" aria-label="B button: hard drop">B</button>
+              </div>
+            </div>
+          </section>
+          <p class="record-note" id="record-note" aria-live="polite"></p>
+        </aside>
+      </section>
+      <p class="sr-only" id="game-status" role="status" aria-live="polite">Ready to play</p>
+    </main>
+
+    <footer class="bottomline">
+      <span>POCKET ARCADE</span>
+      <span>EST. 1988 / GAME 02</span>
+    </footer>
+  </div>
+
+  <script type="module" src="/script.js"></script>
+</body>
+</html>

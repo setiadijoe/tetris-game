@@ -1,0 +1,438 @@
+(() => {
+  function requireElement(id) {
+    const element = document.getElementById(id);
+    if (!element) throw new Error(`Missing required game element: #${id}`);
+    return element;
+  }
+
+  const canvas = requireElement("game-board");
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas 2D rendering is unavailable");
+  const nextCanvas = requireElement("next-piece");
+  const nextContext = nextCanvas.getContext("2d");
+  if (!nextContext) throw new Error("Canvas 2D rendering is unavailable");
+  const overlay = requireElement("screen-overlay");
+  const overlayTitle = requireElement("overlay-title");
+  const overlayCaption = requireElement("overlay-caption");
+  const scoreValue = requireElement("score-value");
+  const bestValue = requireElement("best-value");
+  const levelValue = requireElement("level-value");
+  const linesValue = requireElement("lines-value");
+  const playButton = requireElement("play-button");
+  const gameStatus = requireElement("game-status");
+  const recordNote = requireElement("record-note");
+
+  const COLS = 10;
+  const ROWS = 20;
+  const CELL_SIZE = 30;
+  const POINTS_PER_LEVEL = 500;
+  const BEST_SCORE_KEY = "tetris-best-score";
+  const COLORS = {
+    I: "#007c83",
+    J: "#3047a3",
+    L: "#b45309",
+    O: "#8a6d00",
+    S: "#3c7a36",
+    T: "#713b8e",
+    Z: "#b73535"
+  };
+  const SHAPES = {
+    I: [[1, 1, 1, 1]],
+    J: [[1, 0, 0], [1, 1, 1]],
+    L: [[0, 0, 1], [1, 1, 1]],
+    O: [[1, 1], [1, 1]],
+    S: [[0, 1, 1], [1, 1, 0]],
+    T: [[0, 1, 0], [1, 1, 1]],
+    Z: [[1, 1, 0], [0, 1, 1]]
+  };
+  const LINE_POINTS = [0, 10, 20, 30, 50];
+
+  let board;
+  let currentPiece;
+  let nextType;
+  let pieceBag = [];
+  let score = 0;
+  let lines = 0;
+  let level = 1;
+  let best = readBestScore();
+  let state = "ready";
+  let previousFrame = 0;
+  let dropElapsed = 0;
+  let animationFrame = 0;
+
+  function readBestScore() {
+    try {
+      return Number(window.localStorage.getItem(BEST_SCORE_KEY)) || 0;
+    } catch {
+      recordNote.textContent = "Best score could not be loaded from this device.";
+      return 0;
+    }
+  }
+
+  function saveBestScore() {
+    try {
+      window.localStorage.setItem(BEST_SCORE_KEY, String(best));
+    } catch {
+      recordNote.textContent = "Best score could not be saved on this device.";
+    }
+  }
+
+  function refillBag() {
+    pieceBag = Object.keys(SHAPES);
+    for (let index = pieceBag.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [pieceBag[index], pieceBag[swapIndex]] = [pieceBag[swapIndex], pieceBag[index]];
+    }
+  }
+
+  function takePieceType() {
+    if (pieceBag.length === 0) refillBag();
+    return pieceBag.pop();
+  }
+
+  function makePiece(type) {
+    const shape = SHAPES[type].map((row) => [...row]);
+    return {
+      type,
+      shape,
+      x: Math.floor((COLS - shape[0].length) / 2),
+      y: -1
+    };
+  }
+
+  function spawnPiece() {
+    currentPiece = makePiece(nextType);
+    nextType = takePieceType();
+    drawNextPiece();
+    if (collides(currentPiece, 0, 0, currentPiece.shape)) endGame();
+  }
+
+  function resetGame() {
+    board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    pieceBag = [];
+    score = 0;
+    lines = 0;
+    level = 1;
+    dropElapsed = 0;
+    nextType = takePieceType();
+    spawnPiece();
+    state = "ready";
+    recordNote.textContent = "";
+    updateStats();
+    updateControls();
+    draw();
+  }
+
+  function updateStats() {
+    scoreValue.textContent = String(score).padStart(6, "0");
+    bestValue.textContent = String(best).padStart(6, "0");
+    levelValue.textContent = String(level).padStart(2, "0");
+    linesValue.textContent = String(lines).padStart(2, "0");
+  }
+
+  function updateControls() {
+    if (state === "running") {
+      playButton.textContent = "PAUSE";
+      setOverlay("", "");
+      gameStatus.textContent = "Game started";
+    } else if (state === "paused") {
+      playButton.textContent = "RESUME";
+      setOverlay("PAUSED", "PRESS P TO RESUME");
+      gameStatus.textContent = "Game paused";
+    } else if (state === "over") {
+      playButton.textContent = "PLAY AGAIN";
+      setOverlay("GAME OVER", `SCORE ${String(score).padStart(6, "0")}`);
+      gameStatus.textContent = `Game over. Score ${score}`;
+    } else {
+      playButton.textContent = "START";
+      setOverlay("READY?", "STACK THE BLOCKS");
+      gameStatus.textContent = "Ready to play";
+    }
+  }
+
+  function setOverlay(title, caption) {
+    overlayTitle.textContent = title;
+    overlayCaption.textContent = caption;
+    overlay.hidden = !title;
+  }
+
+  function startGame() {
+    if (state === "over") resetGame();
+    state = "running";
+    previousFrame = 0;
+    dropElapsed = 0;
+    updateControls();
+  }
+
+  function togglePause() {
+    if (state === "running") {
+      state = "paused";
+      updateControls();
+    } else if (state === "paused") {
+      startGame();
+    }
+  }
+
+  function collides(piece, offsetX, offsetY, shape) {
+    for (let row = 0; row < shape.length; row += 1) {
+      for (let col = 0; col < shape[row].length; col += 1) {
+        if (!shape[row][col]) continue;
+        const x = piece.x + offsetX + col;
+        const y = piece.y + offsetY + row;
+        if (x < 0 || x >= COLS || y >= ROWS) return true;
+        if (y >= 0 && board[y][x]) return true;
+      }
+    }
+    return false;
+  }
+
+  function movePiece(offsetX, offsetY) {
+    if (!currentPiece || collides(currentPiece, offsetX, offsetY, currentPiece.shape)) return false;
+    currentPiece.x += offsetX;
+    currentPiece.y += offsetY;
+    draw();
+    return true;
+  }
+
+  function rotateShape(shape) {
+    return shape[0].map((_, column) =>
+      shape.map((row) => row[column]).reverse()
+    );
+  }
+
+  function rotatePiece() {
+    if (!currentPiece) return;
+    const rotated = rotateShape(currentPiece.shape);
+    for (const offset of [0, -1, 1, -2, 2]) {
+      if (!collides(currentPiece, offset, 0, rotated)) {
+        currentPiece.x += offset;
+        currentPiece.shape = rotated;
+        draw();
+        return;
+      }
+    }
+  }
+
+  function hardDrop() {
+    if (state !== "running" || !currentPiece) return;
+    let distance = 0;
+    while (movePiece(0, 1)) distance += 1;
+    if (distance > 0) addScore(distance);
+    lockPiece();
+  }
+
+  function addScore(amount) {
+    score += amount;
+    level = Math.floor(score / POINTS_PER_LEVEL) + 1;
+    if (score > best) {
+      best = score;
+      saveBestScore();
+    }
+    updateStats();
+  }
+
+  function lockPiece() {
+    for (let row = 0; row < currentPiece.shape.length; row += 1) {
+      for (let col = 0; col < currentPiece.shape[row].length; col += 1) {
+        if (!currentPiece.shape[row][col]) continue;
+        const x = currentPiece.x + col;
+        const y = currentPiece.y + row;
+        if (y < 0) {
+          endGame();
+          return;
+        }
+        board[y][x] = currentPiece.type;
+      }
+    }
+
+    clearLines();
+    spawnPiece();
+    draw();
+  }
+
+  function clearLines() {
+    let cleared = 0;
+    for (let row = ROWS - 1; row >= 0; row -= 1) {
+      if (board[row].every(Boolean)) {
+        board.splice(row, 1);
+        board.unshift(Array(COLS).fill(null));
+        cleared += 1;
+        row += 1;
+      }
+    }
+    if (cleared === 0) return;
+    lines += cleared;
+    addScore(LINE_POINTS[cleared]);
+    updateStats();
+  }
+
+  function endGame() {
+    state = "over";
+    updateControls();
+  }
+
+  function dropInterval() {
+    return Math.max(80, 850 * Math.pow(0.82, level - 1));
+  }
+
+  function gameLoop(timestamp) {
+    if (state === "running") {
+      if (previousFrame === 0) previousFrame = timestamp;
+      const elapsed = Math.min(timestamp - previousFrame, 100);
+      previousFrame = timestamp;
+      dropElapsed += elapsed;
+      if (dropElapsed >= dropInterval()) {
+        dropElapsed = 0;
+        if (!movePiece(0, 1)) lockPiece();
+      }
+    } else {
+      previousFrame = timestamp;
+    }
+    animationFrame = window.requestAnimationFrame(gameLoop);
+  }
+
+  function drawCell(target, x, y, type, size, alpha = 1) {
+    target.globalAlpha = alpha;
+    target.fillStyle = COLORS[type];
+    target.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+    target.fillStyle = "rgba(255, 255, 255, 0.28)";
+    target.fillRect(x * size + 2, y * size + 2, size - 4, Math.max(2, size * 0.12));
+    target.globalAlpha = 1;
+  }
+
+  function draw() {
+    context.fillStyle = "#bacd92";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.strokeStyle = "rgba(37, 54, 38, 0.11)";
+    context.lineWidth = 1;
+    for (let x = 0; x <= COLS; x += 1) {
+      context.beginPath();
+      context.moveTo(x * CELL_SIZE + 0.5, 0);
+      context.lineTo(x * CELL_SIZE + 0.5, canvas.height);
+      context.stroke();
+    }
+    for (let y = 0; y <= ROWS; y += 1) {
+      context.beginPath();
+      context.moveTo(0, y * CELL_SIZE + 0.5);
+      context.lineTo(canvas.width, y * CELL_SIZE + 0.5);
+      context.stroke();
+    }
+
+    for (let y = 0; y < ROWS; y += 1) {
+      for (let x = 0; x < COLS; x += 1) {
+        if (board[y][x]) drawCell(context, x, y, board[y][x], CELL_SIZE);
+      }
+    }
+
+    if (!currentPiece) return;
+    const ghost = { ...currentPiece, shape: currentPiece.shape };
+    while (!collides(ghost, 0, 1, ghost.shape)) ghost.y += 1;
+    drawPiece(ghost, 0.28);
+    drawPiece(currentPiece);
+  }
+
+  function drawPiece(piece, alpha = 1) {
+    for (let row = 0; row < piece.shape.length; row += 1) {
+      for (let col = 0; col < piece.shape[row].length; col += 1) {
+        const x = piece.x + col;
+        const y = piece.y + row;
+        if (piece.shape[row][col] && y >= 0) {
+          drawCell(context, x, y, piece.type, CELL_SIZE, alpha);
+        }
+      }
+    }
+  }
+
+  function drawNextPiece() {
+    nextContext.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+    if (!nextType) return;
+    const shape = SHAPES[nextType];
+    const size = 18;
+    const offsetX = (nextCanvas.width - shape[0].length * size) / 2;
+    const offsetY = (nextCanvas.height - shape.length * size) / 2;
+    for (let row = 0; row < shape.length; row += 1) {
+      for (let col = 0; col < shape[row].length; col += 1) {
+        if (!shape[row][col]) continue;
+        nextContext.save();
+        nextContext.translate(offsetX, offsetY);
+        drawCell(nextContext, col, row, nextType, size);
+        nextContext.restore();
+      }
+    }
+  }
+
+  function performAction(action) {
+    if (action === "pause") {
+      togglePause();
+      return;
+    }
+    if (state === "over") {
+      if (action === "start") {
+        resetGame();
+        startGame();
+      }
+      return;
+    }
+    if (state === "paused") {
+      if (action === "start") startGame();
+      return;
+    }
+    if (state === "ready") startGame();
+    if (state !== "running") return;
+
+    if (action === "left") movePiece(-1, 0);
+    else if (action === "right") movePiece(1, 0);
+    else if (action === "rotate") rotatePiece();
+    else if (action === "down") {
+      if (movePiece(0, 1)) addScore(1);
+      else lockPiece();
+    } else if (action === "drop") hardDrop();
+  }
+
+  playButton.addEventListener("click", () => {
+    if (state === "running") togglePause();
+    else performAction("start");
+  });
+
+  document.querySelectorAll("[data-action]").forEach((button) => {
+    button.addEventListener("click", () => performAction(button.dataset.action));
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.target instanceof HTMLElement &&
+      event.target.closest("input, textarea, select, [contenteditable='true']")) return;
+
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    const actions = {
+      ArrowLeft: "left",
+      ArrowRight: "right",
+      ArrowDown: "down",
+      ArrowUp: "rotate",
+      a: "left",
+      d: "right",
+      s: "down",
+      w: "rotate",
+      j: "rotate",
+      l: "drop",
+      " ": "drop"
+    };
+    const action = actions[key];
+    if (action) {
+      event.preventDefault();
+      if (!event.repeat || action === "left" || action === "right" || action === "down") {
+        performAction(action);
+      }
+    } else if (key === "p" && !event.repeat) {
+      event.preventDefault();
+      togglePause();
+    }
+  });
+
+  window.addEventListener("blur", () => {
+    if (state === "running") togglePause();
+  });
+
+  resetGame();
+  animationFrame = window.requestAnimationFrame(gameLoop);
+  window.addEventListener("beforeunload", () => window.cancelAnimationFrame(animationFrame), { once: true });
+})();
