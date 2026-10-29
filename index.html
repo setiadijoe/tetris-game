@@ -26,6 +26,17 @@
               <h1>TETRIS</h1>
             </div>
             <span class="title-rule" aria-hidden="true"></span>
+            <section class="high-score-panel" aria-labelledby="high-score-title">
+              <div class="panel-heading">
+                <h2 id="high-score-title">TOP SCORE</h2>
+                <span id="top-score-name">LOADING</span>
+              </div>
+              <output class="high-score-value" id="top-score-value" aria-live="polite">------</output>
+              <p class="high-score-message" id="top-score-message" role="status"></p>
+              <button class="score-list-button" id="view-high-scores" type="button">
+                VIEW SCORES
+              </button>
+            </section>
           </div>
 
           <div class="console">
@@ -35,6 +46,29 @@
             </div>
             <div class="screen">
               <canvas class="game-canvas" id="game-board" width="300" height="600" role="img" aria-label="Tetris game board" aria-describedby="game-status"></canvas>
+              <div class="screen-widgets" aria-label="Current game stats and next piece">
+                <section class="next-panel" aria-labelledby="next-title">
+                  <div class="panel-heading">
+                    <h2 id="next-title">NEXT</h2>
+                  </div>
+                  <div class="preview-screen">
+                    <canvas id="next-piece" width="120" height="100" role="img" aria-label="Next Tetris piece"></canvas>
+                  </div>
+                </section>
+
+                <section class="screen-stat" aria-label="Current score">
+                  <span class="stat-label">SCORE</span>
+                  <output class="stat-value" id="score-value">000000</output>
+                </section>
+                <section class="screen-stat" aria-label="Current level">
+                  <span class="stat-label">LEVEL</span>
+                  <output class="stat-value" id="level-value">01</output>
+                </section>
+                <section class="screen-stat" aria-label="Lines cleared">
+                  <span class="stat-label">LINES</span>
+                  <output class="stat-value" id="lines-value">00</output>
+                </section>
+              </div>
               <div class="screen-overlay" id="screen-overlay" aria-hidden="true">
                 <strong id="overlay-title">READY?</strong>
                 <span id="overlay-caption">STACK THE BLOCKS</span>
@@ -48,45 +82,11 @@
         </div>
 
         <aside class="side-panel" aria-label="Score and controls">
-          <section class="next-panel" aria-labelledby="next-title">
-            <div class="panel-heading">
-              <h2 id="next-title">NEXT</h2>
-              <span>UP</span>
-            </div>
-            <div class="preview-screen">
-              <canvas id="next-piece" width="120" height="100" role="img" aria-label="Next Tetris piece"></canvas>
-            </div>
-          </section>
-
-          <section class="stats-panel" aria-label="Game statistics">
-            <div class="stat">
-              <span class="stat-label">Score</span>
-              <output class="stat-value" id="score-value">000000</output>
-            </div>
-            <div class="stat-row">
-              <div class="stat stat-small">
-                <span class="stat-label">Best</span>
-                <output class="stat-value" id="best-value">000000</output>
-              </div>
-              <div class="stat stat-small">
-                <span class="stat-label">Level</span>
-                <output class="stat-value" id="level-value">01</output>
-              </div>
-              <div class="stat stat-small">
-                <span class="stat-label">Lines</span>
-                <output class="stat-value" id="lines-value">00</output>
-              </div>
-            </div>
-          </section>
-
-          <button class="game-button primary-button" id="play-button" type="button">START</button>
-
-          <section class="control-block" aria-label="Game controls">
-            <p class="control-heading">CONTROLS</p>
-            <p class="keyboard-help"><kbd>←</kbd><kbd>→</kbd> MOVE <kbd>↑</kbd> ROTATE</p>
-            <p class="keyboard-help"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> MOVE <kbd>J</kbd> ROTATE <kbd>L</kbd> DROP</p>
-            <p class="keyboard-help"><kbd>↓</kbd> SOFT DROP <kbd>SPACE</kbd> HARD DROP <kbd>P</kbd> PAUSE</p>
+          <section class="control-block" aria-label="Gamepad">
             <div class="touch-controls" aria-label="Game Boy style touch controls">
+              <button class="game-button primary-button gamepad-start" id="play-button" type="button">
+                START
+              </button>
               <div class="d-pad" role="group" aria-label="Direction keypad">
                 <button class="d-pad-button d-pad-up" type="button" data-action="rotate" aria-label="Rotate piece">▲</button>
                 <button class="d-pad-button d-pad-left" type="button" data-action="left" aria-label="Move left">◀</button>
@@ -105,6 +105,49 @@
       </section>
       <p class="sr-only" id="game-status" role="status" aria-live="polite">Ready to play</p>
     </main>
+
+    <dialog class="score-submit-dialog" id="score-submit-dialog" aria-labelledby="score-submit-title">
+      <form class="score-submit-form" id="score-submit-form">
+        <p class="eyebrow">GAME OVER</p>
+        <h2 id="score-submit-title">SAVE YOUR SCORE</h2>
+        <p class="score-submit-value">
+          YOUR SCORE
+          <output id="game-over-score">000000</output>
+        </p>
+        <label for="player-name">YOUR NAME</label>
+        <input
+          id="player-name"
+          name="name"
+          type="text"
+          maxlength="30"
+          autocomplete="nickname"
+          required
+        >
+        <p class="score-submit-error" id="score-submit-error" role="alert" hidden></p>
+        <div class="score-submit-actions">
+          <button class="score-submit-cancel" id="cancel-score-submit" type="button">CANCEL</button>
+          <button class="score-submit-save" id="save-score" type="submit">SAVE SCORE</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="high-scores-dialog" id="high-scores-dialog" aria-labelledby="high-scores-title">
+      <div class="high-scores-content">
+        <div class="panel-heading">
+          <h2 id="high-scores-title">TETRIS HIGH SCORES</h2>
+          <span id="high-scores-game-label">TOP SCORES</span>
+        </div>
+        <ol class="high-scores-list" id="high-scores-list" aria-live="polite">
+          <li class="high-scores-message">Loading scores...</li>
+        </ol>
+        <div class="high-scores-actions">
+          <button class="score-list-button" id="load-more-scores" type="button" disabled>
+            LOAD MORE
+          </button>
+          <button class="dialog-close-button" id="close-high-scores" type="button">CLOSE</button>
+        </div>
+      </div>
+    </dialog>
 
     <footer class="bottomline">
       <span>POCKET ARCADE</span>

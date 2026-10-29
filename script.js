@@ -15,18 +15,35 @@
   const overlayTitle = requireElement("overlay-title");
   const overlayCaption = requireElement("overlay-caption");
   const scoreValue = requireElement("score-value");
-  const bestValue = requireElement("best-value");
   const levelValue = requireElement("level-value");
   const linesValue = requireElement("lines-value");
   const playButton = requireElement("play-button");
   const gameStatus = requireElement("game-status");
   const recordNote = requireElement("record-note");
+  const topScoreName = requireElement("top-score-name");
+  const topScoreValue = requireElement("top-score-value");
+  const topScoreMessage = requireElement("top-score-message");
+  const viewHighScoresButton = requireElement("view-high-scores");
+  const highScoresDialog = requireElement("high-scores-dialog");
+  const highScoresList = requireElement("high-scores-list");
+  const loadMoreScoresButton = requireElement("load-more-scores");
+  const closeHighScoresButton = requireElement("close-high-scores");
+  const scoreSubmitDialog = requireElement("score-submit-dialog");
+  const scoreSubmitForm = requireElement("score-submit-form");
+  const playerNameInput = requireElement("player-name");
+  const gameOverScore = requireElement("game-over-score");
+  const scoreSubmitError = requireElement("score-submit-error");
+  const saveScoreButton = requireElement("save-score");
+  const cancelScoreSubmitButton = requireElement("cancel-score-submit");
 
   const COLS = 10;
   const ROWS = 20;
   const CELL_SIZE = 30;
   const POINTS_PER_LEVEL = 500;
-  const BEST_SCORE_KEY = "tetris-best-score";
+  const TETRIS_GAME_ID = import.meta.env?.VITE_TITLE_GAME_ID;
+  const API_BASE_URL = import.meta.env?.DEV
+    ? window.location.origin
+    : import.meta.env?.VITE_API_BASE_URL || window.location.origin;
   const COLORS = {
     I: "#007c83",
     J: "#3047a3",
@@ -54,28 +71,191 @@
   let score = 0;
   let lines = 0;
   let level = 1;
-  let best = readBestScore();
   let state = "ready";
   let previousFrame = 0;
   let dropElapsed = 0;
   let animationFrame = 0;
+  let highScoresCursor = "";
+  let highScoresLoaded = 0;
+  let highScoresLoading = false;
+  let highScoresHasMore = true;
 
-  function readBestScore() {
+  function makeScoresUrl(limit, cursor = "") {
+    if (!TETRIS_GAME_ID) throw new Error("Set VITE_TITLE_GAME_ID in .env");
+    const url = new URL("/api/scores", API_BASE_URL);
+    url.searchParams.set("title_game_id", TETRIS_GAME_ID);
+    url.searchParams.set("limit", String(limit));
+    if (cursor) url.searchParams.set("cursor", cursor);
+    return url;
+  }
+
+  async function fetchScores(limit, cursor = "") {
+    const response = await fetch(makeScoresUrl(limit, cursor));
+    if (!response.ok) throw new Error(`Unable to load scores (${response.status})`);
+    const page = await response.json();
+    if (
+      !page ||
+      !Array.isArray(page.scores) ||
+      typeof page.nextCursor !== "string" ||
+      page.scores.some((entry) =>
+        !entry || typeof entry.name !== "string" || !Number.isSafeInteger(entry.score)
+      )
+    ) {
+      throw new Error("The score server returned invalid data");
+    }
+    return page;
+  }
+
+  async function loadTopScore() {
     try {
-      return Number(window.localStorage.getItem(BEST_SCORE_KEY)) || 0;
-    } catch {
-      recordNote.textContent = "Best score could not be loaded from this device.";
-      return 0;
+      const page = await fetchScores(1);
+      topScoreMessage.textContent = "";
+      const [topScore] = page.scores;
+      if (!topScore) {
+        topScoreName.textContent = "NO RECORDS";
+        topScoreValue.textContent = "------";
+        return;
+      }
+      topScoreName.textContent = topScore.name;
+      topScoreValue.textContent = String(topScore.score).padStart(6, "0");
+    } catch (error) {
+      console.error("Unable to load top score", error);
+      topScoreName.textContent = "NO RECORDS";
+      topScoreValue.textContent = "------";
+      topScoreMessage.textContent = "";
     }
   }
 
-  function saveBestScore() {
+  function openScoreSubmitDialog() {
+    scoreSubmitForm.reset();
+    gameOverScore.value = String(score).padStart(6, "0");
+    gameOverScore.textContent = String(score).padStart(6, "0");
+    playerNameInput.setCustomValidity("");
+    scoreSubmitError.hidden = true;
+    scoreSubmitError.textContent = "";
+    scoreSubmitDialog.showModal();
+    playerNameInput.focus();
+  }
+
+  async function submitGameOverScore(event) {
+    event.preventDefault();
+    const name = playerNameInput.value.trim();
+    if (!name || name.length > 30) {
+      playerNameInput.setCustomValidity("Enter a name with 1 to 30 characters.");
+      playerNameInput.reportValidity();
+      return;
+    }
+
+    playerNameInput.setCustomValidity("");
+    saveScoreButton.disabled = true;
+    cancelScoreSubmitButton.disabled = true;
+    scoreSubmitError.hidden = true;
     try {
-      window.localStorage.setItem(BEST_SCORE_KEY, String(best));
-    } catch {
-      recordNote.textContent = "Best score could not be saved on this device.";
+      if (!TETRIS_GAME_ID) throw new Error("Set VITE_TITLE_GAME_ID in .env");
+      const response = await fetch(new URL("/api/scores", API_BASE_URL), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, score, game_id: TETRIS_GAME_ID })
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = result && typeof result.error === "string"
+          ? result.error
+          : `Unable to save score (${response.status})`;
+        throw new Error(message);
+      }
+
+      gameStatus.textContent = `Score ${score} saved for ${
+        result && typeof result.name === "string" ? result.name : name
+      }.`;
+      scoreSubmitDialog.close();
+      void loadTopScore();
+    } catch (error) {
+      scoreSubmitError.textContent = `Unable to save score: ${error.message}`;
+      scoreSubmitError.hidden = false;
+    } finally {
+      saveScoreButton.disabled = false;
+      cancelScoreSubmitButton.disabled = false;
     }
   }
+
+  function appendHighScores(scores) {
+    for (const [index, entry] of scores.entries()) {
+      const row = document.createElement("li");
+      const rank = document.createElement("span");
+      const name = document.createElement("span");
+      const value = document.createElement("span");
+      rank.className = "high-score-rank";
+      name.className = "high-score-player";
+      value.className = "high-score-points";
+      rank.textContent = `${String(highScoresLoaded + index + 1).padStart(2, "0")}.`;
+      name.textContent = entry.name;
+      value.textContent = String(entry.score).padStart(6, "0");
+      row.append(rank, name, value);
+      highScoresList.append(row);
+    }
+    highScoresLoaded += scores.length;
+  }
+
+  async function loadHighScores(reset = false) {
+    if (highScoresLoading || (!reset && !highScoresHasMore)) return;
+    if (reset) {
+      highScoresCursor = "";
+      highScoresLoaded = 0;
+      highScoresHasMore = true;
+      highScoresList.replaceChildren();
+      const message = document.createElement("li");
+      message.className = "high-scores-message";
+      message.textContent = "Loading scores...";
+      highScoresList.append(message);
+    }
+
+    highScoresLoading = true;
+    loadMoreScoresButton.disabled = true;
+    try {
+      const page = await fetchScores(10, highScoresCursor);
+      if (highScoresLoaded === 0) highScoresList.replaceChildren();
+      appendHighScores(page.scores);
+      if (highScoresLoaded === 0) {
+        const message = document.createElement("li");
+        message.className = "high-scores-message";
+        message.textContent = "NO RECORDS";
+        highScoresList.append(message);
+      }
+      highScoresCursor = page.nextCursor;
+      highScoresHasMore = Boolean(page.nextCursor);
+    } catch (error) {
+      console.error("Unable to load high scores", error);
+      if (highScoresLoaded === 0) highScoresList.replaceChildren();
+      const message = document.createElement("li");
+      message.className = "high-scores-message";
+      message.textContent = highScoresLoaded === 0 ? "NO RECORDS" : "Unable to load more scores.";
+      highScoresList.append(message);
+    } finally {
+      highScoresLoading = false;
+      loadMoreScoresButton.disabled = !highScoresHasMore;
+      loadMoreScoresButton.hidden = !highScoresHasMore;
+    }
+  }
+
+  viewHighScoresButton.addEventListener("click", () => {
+    highScoresDialog.showModal();
+    void loadHighScores(true);
+  });
+  loadMoreScoresButton.addEventListener("click", () => void loadHighScores());
+  closeHighScoresButton.addEventListener("click", () => highScoresDialog.close());
+  scoreSubmitForm.addEventListener("submit", (event) => {
+    void submitGameOverScore(event);
+  });
+  playerNameInput.addEventListener("input", () => playerNameInput.setCustomValidity(""));
+  cancelScoreSubmitButton.addEventListener("click", () => {
+    scoreSubmitDialog.close();
+    gameStatus.textContent = "Score not saved.";
+  });
+  scoreSubmitDialog.addEventListener("cancel", () => {
+    gameStatus.textContent = "Score not saved.";
+  });
+  scoreSubmitDialog.addEventListener("close", () => playButton.focus());
 
   function refillBag() {
     pieceBag = Object.keys(SHAPES);
@@ -125,7 +305,6 @@
 
   function updateStats() {
     scoreValue.textContent = String(score).padStart(6, "0");
-    bestValue.textContent = String(best).padStart(6, "0");
     levelValue.textContent = String(level).padStart(2, "0");
     linesValue.textContent = String(lines).padStart(2, "0");
   }
@@ -215,19 +394,13 @@
 
   function hardDrop() {
     if (state !== "running" || !currentPiece) return;
-    let distance = 0;
-    while (movePiece(0, 1)) distance += 1;
-    if (distance > 0) addScore(distance);
+    while (movePiece(0, 1)) {}
     lockPiece();
   }
 
   function addScore(amount) {
     score += amount;
     level = Math.floor(score / POINTS_PER_LEVEL) + 1;
-    if (score > best) {
-      best = score;
-      saveBestScore();
-    }
     updateStats();
   }
 
@@ -269,6 +442,7 @@
   function endGame() {
     state = "over";
     updateControls();
+    openScoreSubmitDialog();
   }
 
   function dropInterval() {
@@ -384,8 +558,7 @@
     else if (action === "right") movePiece(1, 0);
     else if (action === "rotate") rotatePiece();
     else if (action === "down") {
-      if (movePiece(0, 1)) addScore(1);
-      else lockPiece();
+      if (!movePiece(0, 1)) lockPiece();
     } else if (action === "drop") hardDrop();
   }
 
@@ -433,6 +606,7 @@
   });
 
   resetGame();
+  void loadTopScore();
   animationFrame = window.requestAnimationFrame(gameLoop);
   window.addEventListener("beforeunload", () => window.cancelAnimationFrame(animationFrame), { once: true });
 })();
