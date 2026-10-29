@@ -1006,7 +1006,7 @@ kbd {
 
   .touch-controls {
     display: grid;
-    grid-template-columns: 70px 114px minmax(100px, 1fr);
+    grid-template-columns: minmax(0, 1fr) 70px minmax(0, 1fr);
     gap: 4px;
     width: min(360px, 100%);
     margin-inline: auto;
@@ -1014,24 +1014,35 @@ kbd {
   }
 
   .gamepad-start {
-    grid-column: 1;
+    grid-column: 2;
     margin: 0;
   }
 
   .d-pad {
+    grid-column: 1;
     justify-self: center;
   }
 
   .action-buttons {
+    grid-column: 3;
     justify-self: center;
-    gap: 8px;
-    padding: 0;
+    align-items: flex-start;
+    gap: clamp(10px, 3.5vw, 14px);
+    padding: 0 2px;
     transform: none;
   }
 
+  .action-a {
+    margin-top: 6px;
+  }
+
+  .action-b {
+    margin-top: -18px;
+  }
+
   .action-button {
-    width: 42px;
-    height: 42px;
+    width: clamp(44px, 13vw, 52px);
+    height: clamp(44px, 13vw, 52px);
   }
 }
 
