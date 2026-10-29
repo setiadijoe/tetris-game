@@ -873,16 +873,24 @@ kbd {
 }
 
 @media (max-width: 460px) {
+  .page-shell {
+    padding-bottom: 170px;
+  }
+
   .game-layout {
     grid-template-columns: minmax(0, 1fr);
     row-gap: 16px;
-    margin-inline: auto;
   }
 
   .game-column {
     grid-column: 1;
     justify-self: center;
     width: min(300px, 100%);
+    min-width: 0;
+  }
+
+  .screen {
+    aspect-ratio: 1 / 1.6;
   }
 
   .page-title {
@@ -967,7 +975,6 @@ kbd {
   .control-block,
   .record-note {
     grid-column: 1 / -1;
-    grid-row: auto;
   }
 
   .stats-panel > .stat {
@@ -987,12 +994,60 @@ kbd {
   }
 
   .control-block {
-    padding-top: 8px;
+    position: fixed;
+    z-index: 20;
+    inset: auto 0 0;
+    width: 100%;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    border-top: 2px solid var(--ink);
+    background: var(--paper);
+    box-shadow: 0 -4px 12px rgba(32, 37, 29, 0.12);
   }
 
   .touch-controls {
-    max-width: 360px;
+    display: grid;
+    grid-template-columns: 70px 114px minmax(100px, 1fr);
+    gap: 4px;
+    width: min(360px, 100%);
     margin-inline: auto;
+    padding: 0;
+  }
+
+  .gamepad-start {
+    grid-column: 1;
+    margin: 0;
+  }
+
+  .d-pad {
+    justify-self: center;
+  }
+
+  .action-buttons {
+    justify-self: center;
+    gap: 8px;
+    padding: 0;
+    transform: none;
+  }
+
+  .action-button {
+    width: 42px;
+    height: 42px;
+  }
+}
+
+@media (max-width: 350px) {
+  .page-shell {
+    width: calc(100% - 20px);
+    padding-top: 12px;
+  }
+
+  .game-layout {
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 12px;
+  }
+
+  .console {
+    padding: 5px;
   }
 }
 
